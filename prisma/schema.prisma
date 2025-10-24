@@ -1,0 +1,108 @@
+datasource db {
+    provider = "postgresql"
+    url = env("DATABASE_URL")
+}
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+enum TransactionType {
+    DEPOSIT
+    WITHDRAW
+    SWAP
+    REINVEST
+    DIVIDENDS
+    BONUS
+}
+
+enum TransactionToken {
+    ALB
+    ALT
+    USDT
+}
+
+enum Lang {
+    RU
+    EN
+}
+
+model User {
+    id Int @id @default(autoincrement())
+    createdAt DateTime @default(now())
+    lang Lang @default(EN)
+    wallet Wallet?
+    referrerId Int?      
+    referrer   User?     @relation("UserReferrals", fields: [referrerId], references: [id])
+    referrals  User[]    @relation("UserReferrals")
+    isNewbie Boolean @default(true)
+    isFrozen Boolean @default(false)
+    tgId String @unique
+}
+
+model Wallet {
+    id Int @id @default(autoincrement())
+    userId Int @unique
+    address String
+    privateKey String
+    alb_balance Float @default(0)
+    locked_alb_balance Float @default(0)
+    alt_balance Float @default(0)
+    locked_alt_balance Float @default(0)
+    withdrawAddress String
+    depositAddress String?
+    transactions Transaction[]
+    user User @relation(fields: [userId], references: [id])
+    createdAt DateTime @default(now())
+}
+
+model Transaction {
+    id Int @id @default(autoincrement())
+    walletId Int
+    wallet Wallet @relation(fields: [walletId], references: [id])
+    hash String? @unique
+    type TransactionType
+    ref_lvl Int?
+    alb_alt_rate Float?
+    alt_usdt_rate Float?
+    from_token TransactionToken?
+    from_amount Float?
+    isLocked Boolean @default(false)
+    lockedUntil DateTime?
+    to_token TransactionToken
+    to_amount Float
+    createdAt DateTime @default(now())
+}
+
+model Settings {
+    id Int @id @default(autoincrement())
+    // REFERRAL
+    ref_lvl1_bonus_percent Float @default(6) // percent
+    ref_lvl2_bonus_percent Float @default(5)
+    ref_lvl3_bonus_percent Float @default(4)
+    ref_lvl4_bonus_percent Float @default(3)
+    ref_lvl5_bonus_percent Float @default(2)
+    referral_deposit_bonus_percent Float @default(3)
+
+    // INCOME
+    daily_income_alb_percent Float @default(0.8)
+
+    // SWAP
+    min_swap_alt_amount Float @default(10)
+    min_swap_alb_amount Float @default(10)
+    alt_usdt_rate Float @default(1) // 1 -> value, ex. 1 ALT -> 0.92 USDT
+    alb_alt_rate Float @default(8.75) // 1 -> value
+
+    // DEPOSIT AND WITHDRAW
+    deposit_fee_percent Float @default(2)
+    deposit_min_amount Float @default(100) // USDT
+    withdraw_fee_percent Float @default(3)
+    withdraw_min_amount Float @default(100) // ALT
+    
+    // COOLDOWN DURATION
+    alt_alb_cooldown_days Int @default(3)
+    usdt_withdraw_cooldown_days Int @default(30)
+
+    updatedAt DateTime @updatedAt
+    createdAt DateTime @default(now())
+}
