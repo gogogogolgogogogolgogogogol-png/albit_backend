@@ -137,6 +137,7 @@ export class TransactionsService implements OnModuleInit {
             const amount = parseInt(txLog.data, 16)
             totalAmount += amount
         }
+        
 
         if (totalAmount < settings.deposit_min_amount) throw new BadRequestException("amount should be greater than min amount")
         

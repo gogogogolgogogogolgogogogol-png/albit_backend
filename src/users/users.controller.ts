@@ -1,7 +1,9 @@
-import { BadRequestException, Body, Controller, Get, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Post, Res } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import { ChangeLangRequest, ChangeWithdrawAddressRequest } from "./users.dto";
 import { Lang } from "@prisma/client";
+import { Response } from "express";
+import { getInitData } from "src/utils/tg.utils";
 
 @Controller("users")
 export class UsersController {
@@ -10,7 +12,9 @@ export class UsersController {
     ) {}
 
     @Get("me")
-    async getMe() {
+    async getMe(@Res() res: Response) {
+        const initData = getInitData(res)
+        console.log(initData)
         try {
             const tgId = "0"
             const res = await this.usersService.getMe(tgId)
