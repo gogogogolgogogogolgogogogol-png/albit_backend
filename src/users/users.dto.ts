@@ -1,5 +1,9 @@
 import { Transaction, Lang } from "@prisma/client"
 
+export interface RegisterResponse {
+    accessToken: string
+}
+
 export interface ChangeWithdrawAddressRequest {
     address: string
 }
@@ -34,12 +38,28 @@ type ReferralLevel = {
         }
 
 export interface GetMeResponse {
+    username?: string
+    firstName: string
+    lang: Lang
+    lastName?: string
+    cooldowns_days: {
+      reinvest: number,
+      alt_alb_swap: number,
+      withdraw: number
+    },
+    fees: {
+        deposit: number
+        withdraw: number
+    }
     balances: {
         alt_balance: number
+        locked_alt_balance: number
+        alt_dividends: number
         alt_in_usd_balance: number
         alb_balance: number
+        locked_alb_balance: number
     }
-    history_all: Transaction[]
+    history_transactions: Transaction[]
     withdraw_address: string
     deposit_address: string
     earned: {
@@ -58,6 +78,7 @@ export interface GetMeResponse {
         alb_alt_rate: number
     }
     referrals: {
+        bonus_percent: number
         count: number
         active: number
         totalBonuses: number

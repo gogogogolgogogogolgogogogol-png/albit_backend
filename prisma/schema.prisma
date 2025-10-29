@@ -22,6 +22,13 @@ enum TransactionToken {
     USDT
 }
 
+enum TransactionStatus {
+    FROZEN
+    PENDING
+    COMPLETED
+    // FAILED
+}
+
 enum Lang {
     RU
     EN
@@ -31,11 +38,13 @@ model User {
     id         Int      @id @default(autoincrement())
     createdAt  DateTime @default(now())
     lang       Lang     @default(EN)
+    username String?
+    firstName String
+    lastName String?
     wallet     Wallet?
     referrerId Int?
     referrer   User?    @relation("UserReferrals", fields: [referrerId], references: [id])
     referrals  User[]   @relation("UserReferrals")
-    isNewbie   Boolean  @default(true)
     isFrozen   Boolean  @default(false)
     tgId       String   @unique
 }
@@ -44,13 +53,15 @@ model Wallet {
     id                 Int           @id @default(autoincrement())
     userId             Int           @unique
     address            String
+    gasFreeAddress String
+    isActivated Boolean @default(false)
     privateKey         String
     alb_balance        Float         @default(0)
     locked_alb_balance Float         @default(0)
     alt_balance        Float         @default(0)
     locked_alt_balance Float         @default(0)
-    withdrawAddress    String
-    depositAddress     String?
+    alt_dividends Float @default(0)
+    withdrawAddress    String?
     transactions       Transaction[]
     user               User          @relation(fields: [userId], references: [id])
     createdAt          DateTime      @default(now())
@@ -62,6 +73,8 @@ model Transaction {
     wallet        Wallet            @relation(fields: [walletId], references: [id])
     hash          String?           @unique
     type          TransactionType
+    status TransactionStatus
+    feeUsdt Float?
     ref_lvl       Int?
     alb_alt_rate  Float?
     alt_usdt_rate Float?
@@ -82,9 +95,9 @@ model Settings {
     ref_lvl3_bonus_percent         Float @default(4)
     ref_lvl4_bonus_percent         Float @default(3)
     ref_lvl5_bonus_percent         Float @default(2)
-    referral_deposit_bonus_percent Float @default(3)
 
     // INCOME
+    future_daily_income_alb_percent Float @default(0.8)
     daily_income_alb_percent Float @default(0.8)
 
     // SWAP
@@ -94,12 +107,13 @@ model Settings {
     alb_alt_rate        Float @default(8.75) // 1 -> value
 
     // DEPOSIT AND WITHDRAW
-    deposit_fee_percent  Float @default(2)
+    deposit_fee_usdt  Float @default(2)
     deposit_min_amount   Float @default(100) // USDT
-    withdraw_fee_percent Float @default(3)
+    withdraw_fee_usdt Float @default(3)
     withdraw_min_amount  Float @default(100) // ALT
 
     // COOLDOWN DURATION
+    reinvest_cooldown_days Int @default(1)
     alt_alb_cooldown_days       Int @default(3)
     usdt_withdraw_cooldown_days Int @default(30)
 

@@ -3,20 +3,28 @@ import { setInitData } from "src/utils/tg.utils";
 import { parse, validate } from '@tma.js/init-data-node';
 
 @Injectable()
-export class UserMiddleware implements NestMiddleware {
+export class UsersMiddleware implements NestMiddleware {
     use(req: any, res: any, next: (error?: any) => void) {
         try {
-          const token = "BOT_TOKEN"
+          const token = "5002679940:AAGUeicXiUlzIu4hozKTzgBgF7P66R9dbFg"
           const [authType, authData = ''] = (req.header('authorization') || '').split(' ');
 
-        // Validate init data.
-        validate(authData, token, {
-          // We consider init data sign valid for 1 hour from their creation moment.
-          expiresIn: 3600,
-        });
+          console.log("auth type", authType)
+        switch (authType) {
+          case "tma": {
+            validate(authData, token, {
+              expiresIn: 3600,
+            });
 
-        // Parse init data. We will surely need it in the future.
-        setInitData(res, parse(authData));
+            setInitData(res, parse(authData));
+
+            break
+          }
+          case "Bearer": {
+            
+          }
+        }
+        
         return next();
       } catch (e) {
         return next(e);
