@@ -6,6 +6,7 @@ export interface RegisterResponse {
 
 export interface ChangeWithdrawAddressRequest {
     address: string
+    isNewbie?: boolean
 }
 
 export interface ChangeWithdrawAddressResponse {
@@ -35,12 +36,15 @@ type ReferralLevel = {
             count: number,
             percent: number,
             totalBonuses: number,
+            minAmountAlb: number
         }
 
 export interface GetMeResponse {
     username?: string
     firstName: string
     lang: Lang
+    isFrozen: boolean
+    isNewbie: boolean
     lastName?: string
     cooldowns_days: {
       reinvest: number,

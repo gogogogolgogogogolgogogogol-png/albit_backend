@@ -32,6 +32,8 @@ enum TransactionStatus {
 enum Lang {
     RU
     EN
+    HI
+    ES
 }
 
 model User {
@@ -41,9 +43,10 @@ model User {
     username String?
     firstName String
     lastName String?
+    isNewbie Boolean @default(true)
     wallet     Wallet?
     referrerId Int?
-    referrer   User?    @relation("UserReferrals", fields: [referrerId], references: [id])
+    referrer   User?    @relation("UserReferrals", fields: [referrerId], references: [id], onDelete: SetNull)
     referrals  User[]   @relation("UserReferrals")
     isFrozen   Boolean  @default(false)
     tgId       String   @unique
@@ -63,15 +66,15 @@ model Wallet {
     alt_dividends Float @default(0)
     withdrawAddress    String?
     transactions       Transaction[]
-    user               User          @relation(fields: [userId], references: [id])
+    user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
     createdAt          DateTime      @default(now())
 }
 
 model Transaction {
     id            Int               @id @default(autoincrement())
     walletId      Int
-    wallet        Wallet            @relation(fields: [walletId], references: [id])
-    hash          String?           @unique
+    wallet        Wallet            @relation(fields: [walletId], references: [id], onDelete: Cascade)
+    hash          String?
     type          TransactionType
     status TransactionStatus
     feeUsdt Float?
@@ -90,11 +93,18 @@ model Transaction {
 model Settings {
     id                             Int   @id @default(autoincrement())
     // REFERRAL
+    ref_lvl1_bonus_deposit_percent Float @default(6)
     ref_lvl1_bonus_percent         Float @default(6) // percent
     ref_lvl2_bonus_percent         Float @default(5)
     ref_lvl3_bonus_percent         Float @default(4)
     ref_lvl4_bonus_percent         Float @default(3)
     ref_lvl5_bonus_percent         Float @default(2)
+
+    ref_lvl1_bonus_min_alb Float @default(10)
+    ref_lvl2_bonus_min_alb Float @default(20)
+    ref_lvl3_bonus_min_alb Float @default(50)
+    ref_lvl4_bonus_min_alb Float @default(80)
+    ref_lvl5_bonus_min_alb Float @default(100)
 
     // INCOME
     future_daily_income_alb_percent Float @default(0.8)

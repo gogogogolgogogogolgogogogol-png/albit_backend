@@ -13,6 +13,7 @@ RUN pnpm run build
 
 # Генерируем Prisma client
 RUN npx prisma generate
+RUN npx prisma db push
 
 # --- Этап 2: минимальный runtime ---
 FROM node:22-alpine AS runner

@@ -1,14 +1,14 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PrismaModule } from "nestjs-prisma";
+import { PrismaModule } from 'nestjs-prisma';
 import { UsersModule } from './users/users.module';
 import { ConfigModule } from '@nestjs/config';
 import { TransactionsModule } from './transactions/transactions.module';
 import { UsersMiddleware } from './users/users.middleware';
+import { FrozenCheckMiddleware } from './users/frozen-check.middleware';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './users/users.guard';
-import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -22,12 +22,14 @@ import { ScheduleModule } from '@nestjs/schedule';
     AppService,
     {
       provide: APP_GUARD,
-      useClass: AuthGuard
-    }
+      useClass: AuthGuard,
+    },
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(UsersMiddleware).forRoutes('*')
+    consumer.apply(UsersMiddleware).forRoutes('*');
+
+    consumer.apply(FrozenCheckMiddleware).forRoutes('*');
   }
 }

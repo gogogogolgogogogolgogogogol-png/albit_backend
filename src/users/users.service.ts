@@ -93,7 +93,23 @@ export class UsersService {
       }
     }
 
-    async changeWithdrawAddress(tgId: string, address: string): Promise<ChangeWithdrawAddressResponse> {
+    async passNewbie(tgId: string) {
+      const user = await this.prisma.user.findUnique({ where: { tgId }, include: { wallet: true } })
+      if (!(user && user?.wallet)) throw new BadRequestException("user not found")
+      
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          isNewbie: false
+        }
+      })
+
+      return {
+        status: "ok"
+      }
+    }
+
+    async changeWithdrawAddress(tgId: string, address: string, isNewbie?: boolean): Promise<ChangeWithdrawAddressResponse> {
       const user = await this.prisma.user.findUnique({ where: { tgId }, include: { wallet: true } })
       if (!(user && user?.wallet)) throw new UnauthorizedException("user not found")
       
@@ -103,8 +119,21 @@ export class UsersService {
 
       await this.prisma.wallet.update({
         where: { id: user.wallet.id },
-        data: { withdrawAddress: address }
+        data: { 
+          withdrawAddress: address,
+        }
       })
+
+      if (isNewbie) {
+        await this.prisma.user.update({
+          where: {
+            id: user.id
+          },
+          data: {
+            isNewbie: false
+          }
+        })
+      }
 
       return {
         status: "ok",
@@ -134,13 +163,21 @@ export class UsersService {
                 select: { id: true, wallet: { select: { transactions: true } } },
             });
 
+            console.log(referrals)
+
             if (referrals.length === 0) break;
 
             totalCount += referrals.length;
             currentLevelIds = referrals.map(r => {
                 if (r.wallet?.transactions?.find(e => e.type == TransactionType.DEPOSIT)) {
                     totalActiveCount++
-                    totalCountByLVL[level] += 1
+                    if (isNaN(totalCountByLVL[level])) {
+                      totalCountByLVL[level] = 1
+                    } else {
+                      totalCountByLVL[level] += 1
+                    }
+                    console.log('level', level)
+                    console.log('totlaCount', totalCountByLVL[level])
                 }
                 return r.id
             });
@@ -153,7 +190,8 @@ export class UsersService {
         };
     }
 
-    async getMe(tgId: string): Promise<GetMeResponse> {
+    async  getMe(tgId: string): Promise<GetMeResponse> {
+      console.log('getme', tgId)
   const user = await this.prisma.user.findUnique({
     where: { tgId },
     select: {
@@ -162,6 +200,8 @@ export class UsersService {
       lang: true,
       username: true,
       firstName: true,
+      isNewbie: true,
+      isFrozen: true,
       lastName: true,
       wallet: {
         select: {
@@ -220,6 +260,8 @@ export class UsersService {
       this.countAllReferrals(user.id),
     ]);
 
+    console.log(dividendsAll, dividendsWeek)
+
   if (!settings) throw new BadRequestException("settings not found");
 
   const bonusesMap = new Map<number, number>();
@@ -236,6 +278,8 @@ export class UsersService {
       withdraw: settings.withdraw_fee_usdt,
       deposit: settings.deposit_fee_usdt
     },
+    isNewbie: user.isNewbie,
+    isFrozen: user.isFrozen,
     username: user.username || undefined,
     firstName: user.firstName,
     lastName: user.lastName || undefined,
@@ -272,16 +316,16 @@ export class UsersService {
       withdraw: settings.usdt_withdraw_cooldown_days
     },
     referrals: {
-      bonus_percent: settings.ref_lvl1_bonus_percent,
+      bonus_percent: settings.ref_lvl1_bonus_deposit_percent,
       count: referralsCounts.total_count,
       active: referralsCounts.active_count,
       totalBonuses: bonusAll._sum.to_amount ?? 0,
       link: botLink + user.tgId,
-      lvl1: { percent: settings.ref_lvl1_bonus_percent, count: referralsCounts.totalCountByLVL[1] || 0, totalBonuses: bonusesMap.get(1) ?? 0 },
-      lvl2: { percent: settings.ref_lvl2_bonus_percent, count: referralsCounts.totalCountByLVL[2] || 0, totalBonuses: bonusesMap.get(2) ?? 0 },
-      lvl3: { percent: settings.ref_lvl3_bonus_percent, count: referralsCounts.totalCountByLVL[3] || 0, totalBonuses: bonusesMap.get(3) ?? 0 },
-      lvl4: { percent: settings.ref_lvl4_bonus_percent, count: referralsCounts.totalCountByLVL[4] || 0, totalBonuses: bonusesMap.get(4) ?? 0 },
-      lvl5: { percent: settings.ref_lvl5_bonus_percent, count: referralsCounts.totalCountByLVL[5] || 0, totalBonuses: bonusesMap.get(5) ?? 0 },
+      lvl1: { percent: settings.ref_lvl1_bonus_percent, count: referralsCounts.totalCountByLVL[1] || 0, totalBonuses: bonusesMap.get(1) ?? 0, minAmountAlb: settings.ref_lvl1_bonus_min_alb },
+      lvl2: { percent: settings.ref_lvl2_bonus_percent, count: referralsCounts.totalCountByLVL[2] || 0, totalBonuses: bonusesMap.get(2) ?? 0, minAmountAlb: settings.ref_lvl2_bonus_min_alb },
+      lvl3: { percent: settings.ref_lvl3_bonus_percent, count: referralsCounts.totalCountByLVL[3] || 0, totalBonuses: bonusesMap.get(3) ?? 0, minAmountAlb: settings.ref_lvl3_bonus_min_alb },
+      lvl4: { percent: settings.ref_lvl4_bonus_percent, count: referralsCounts.totalCountByLVL[4] || 0, totalBonuses: bonusesMap.get(4) ?? 0, minAmountAlb: settings.ref_lvl4_bonus_min_alb },
+      lvl5: { percent: settings.ref_lvl5_bonus_percent, count: referralsCounts.totalCountByLVL[5] || 0, totalBonuses: bonusesMap.get(5) ?? 0, minAmountAlb: settings.ref_lvl5_bonus_min_alb },
     },
   };
 }

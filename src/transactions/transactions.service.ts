@@ -17,14 +17,18 @@ export class TransactionsService implements OnModuleInit {
         private readonly config: ConfigService
     ) {}
 
-    @Cron("0 3 * * *")
+    @Cron("0 3 * * *", {
+        timeZone: "UTC"
+    })
+    // @Cron("16 18 * * *")
     async nightCron() {
+        console.log('night cron')
         const settings = await this.prisma.settings.findFirst()
         if (!settings) throw new Error("settings not found")
 
         const currentIncome = settings.daily_income_alb_percent
 
-        const wallets = await this.prisma.wallet.findMany({ where: { alb_balance: { gt: 0 } } })
+        const wallets = await this.prisma.wallet.findMany({ where: { alb_balance: { gt: 0 } }, include: { user: true } })
         for (const wallet of wallets) {
             const currentIncomeFloat = currentIncome / 100
             const albAmount = wallet.alb_balance * currentIncomeFloat
@@ -51,6 +55,79 @@ export class TransactionsService implements OnModuleInit {
                     }
                 })
             ])
+
+            const referrerUserByLevel: Record<number, User> = {}
+
+            if (wallet.user?.referrerId) {
+                for (let lvl = 1; lvl <= MAX_REF_LVL; lvl++) {
+                    const referrerPrev = referrerUserByLevel[lvl - 1]
+
+                    if (!wallet.user?.referrerId) break
+                    if (lvl > 1 && !referrerPrev?.referrerId) break
+
+                    const referrer = await this.prisma.user.findUnique({ 
+                        where: { id: lvl == 1 ? wallet.user.referrerId : referrerPrev.referrerId!! }, 
+                        include: { wallet: true }
+                    })
+
+                    if (!referrer) break
+
+                    referrerUserByLevel[lvl] = referrer
+
+                    if (!(referrer && referrer?.wallet)) continue
+
+                    const refWallet = await this.prisma.wallet.findUnique({ where: { id: referrer.wallet.id } })
+
+                    if (!refWallet) continue
+
+                    const refLvlPercent: Record<number, number> = {
+                        1: settings.ref_lvl1_bonus_percent,
+                        2: settings.ref_lvl2_bonus_percent,
+                        3: settings.ref_lvl3_bonus_percent,
+                        4: settings.ref_lvl4_bonus_percent,
+                        5: settings.ref_lvl5_bonus_percent
+                    }
+
+                    const refLvlMinAmount: Record<number, number> = {
+                        1: settings.ref_lvl1_bonus_min_alb,
+                        2: settings.ref_lvl2_bonus_min_alb,
+                        3: settings.ref_lvl3_bonus_min_alb,
+                        4: settings.ref_lvl4_bonus_min_alb,
+                        5: settings.ref_lvl5_bonus_min_alb
+                    }
+
+                    if (refLvlMinAmount[lvl] > refWallet.alt_balance) continue
+
+                    const refPercent = refLvlPercent[lvl] / 100
+                    const usdtAmountRef = refPercent * altAmount * settings.alt_usdt_rate
+                    const altAmountRef = refPercent * altAmount
+
+                    await this.prisma.$transaction([
+                        this.prisma.wallet.update({
+                            where: { id: refWallet.id },
+                            data: { 
+                                alt_balance: {
+                                    increment: altAmountRef
+                                }
+                            }
+                        }),
+                        this.prisma.transaction.create({
+                            data: {
+                                status: TransactionStatus.COMPLETED,
+                                type: TransactionType.BONUS,
+                                ref_lvl: lvl,
+                                alt_usdt_rate: settings.alt_usdt_rate,
+                                from_token: TransactionToken.USDT,
+                                from_amount: usdtAmountRef,
+                                to_token: TransactionToken.ALT,
+                                to_amount: altAmountRef,
+                                walletId: refWallet.id,
+                            }
+                        })
+                    ])
+                }
+            }
+
         }
 
         if (settings.future_daily_income_alb_percent != currentIncome) {
@@ -60,7 +137,9 @@ export class TransactionsService implements OnModuleInit {
 
     @Cron("* * * * *")
     async cron() {
-        const transactions = await this.prisma.transaction.findMany({ where: { isLocked: true, lockedUntil: { gte: new Date(Date.now()) } } })
+        const transactions = await this.prisma.transaction.findMany({ where: { isLocked: true, lockedUntil: { lte: new Date(Date.now()) } } })
+
+        console.log('cron transactions', transactions)
 
         for (const tx of transactions) {
             switch (tx.type) {
@@ -84,7 +163,7 @@ export class TransactionsService implements OnModuleInit {
                             data: { 
                                 isLocked: false,
                                 status: TransactionStatus.COMPLETED,
-                                lockedUntil: null
+                                lockedUntil: null,
                             }
                         })
                     ])
@@ -109,7 +188,7 @@ export class TransactionsService implements OnModuleInit {
                             data: { 
                                 isLocked: false,
                                 status: TransactionStatus.COMPLETED,
-                                lockedUntil: null
+                                lockedUntil: null,
                             }
                         })
                     ])
@@ -213,7 +292,7 @@ export class TransactionsService implements OnModuleInit {
                         type: TransactionType.SWAP,
                         status: TransactionStatus.FROZEN,
                         isLocked: true,
-                        lockedUntil: new Date(Date.now() - settings.alt_alb_cooldown_days * 24 * 60 * 60 * 1000),
+                        lockedUntil: new Date(Date.now() + settings.alt_alb_cooldown_days * 24 * 60 * 60 * 1000),
                         alb_alt_rate: settings.alb_alt_rate,
                         from_token: TransactionToken.ALT,
                         from_amount: dto.from.amount,
@@ -330,10 +409,54 @@ export class TransactionsService implements OnModuleInit {
         console.log(respGasSubmit)
     }
 
+    private async addDepositBonus(referrerId: number, ref_lvl1_bonus_deposit_percent: number, deposit_amount_usdt: number, deposit_amount_alt: number, txHash: string, alt_usdt_rate: number): Promise<boolean> {
+        const referrer = await this.prisma.user.findUnique({ 
+                    where: { id: referrerId }, 
+                    include: { wallet: true }
+                })
+
+                if (!(referrer && referrer?.wallet)) return false
+
+                const refWallet = await this.prisma.wallet.findUnique({ where: { id: referrer.wallet.id } })
+
+                if (!refWallet) return false
+
+                const refPercent = ref_lvl1_bonus_deposit_percent / 100
+                const usdtAmountRef = refPercent * deposit_amount_usdt
+                const altAmountRef = refPercent * deposit_amount_alt
+
+                await this.prisma.$transaction([
+                    this.prisma.wallet.update({
+                        where: { id: refWallet.id },
+                        data: { 
+                            alt_balance: {
+                                increment: altAmountRef
+                            }
+                        }
+                    }),
+                    this.prisma.transaction.create({
+                        data: {
+                            status: TransactionStatus.COMPLETED,
+                            type: TransactionType.BONUS,
+                            hash: txHash,
+                            ref_lvl: 1,
+                            alt_usdt_rate: alt_usdt_rate,
+                            from_token: TransactionToken.USDT,
+                            from_amount: usdtAmountRef,
+                            to_token: TransactionToken.ALT,
+                            to_amount: altAmountRef,
+                            walletId: refWallet.id,
+                        }
+                    })
+                ])
+
+                return true
+    }
+
     async deposit(tgId: string, txHashWithSpaces: string): Promise<DepositResponse> {
         const txHash = txHashWithSpaces.replaceAll(" ", "")
 
-        const txExists = await this.prisma.transaction.findUnique({ where: { hash: txHash } })
+        const txExists = await this.prisma.transaction.findFirst({ where: { hash: txHash } })
         if (txExists) throw new BadRequestException("transaction exists")
 
         const user = await this.prisma.user.findUnique({ where: { tgId }, include: { wallet: true } })
@@ -413,60 +536,58 @@ export class TransactionsService implements OnModuleInit {
             })
         ])
 
-        const referrerUserByLevel: Record<number, User> = {}
 
-        if (user?.referrerId) {
-            for (let lvl = 1; lvl <= MAX_REF_LVL; lvl++) {
-                const referrerPrev = referrerUserByLevel[lvl - 1]
+        if (user?.referrerId) await this.addDepositBonus(user.referrerId, settings.ref_lvl1_bonus_deposit_percent, deposit_amount_usdt, deposit_amount_alt, txHash, settings.alt_usdt_rate)
+            // for (let lvl = 1; lvl <= 1; lvl++) {
+            //     const referrerPrev = referrerUserByLevel[lvl - 1]
 
-                if (!user?.referrerId) break
-                if (lvl > 1 && !referrerPrev?.referrerId) break
+            //     if (!user?.referrerId) break
+            //     if (lvl > 1 && !referrerPrev?.referrerId) break
 
-                const referrer = await this.prisma.user.findUnique({ 
-                    where: { id: lvl == 1 ? user.referrerId : referrerPrev.referrerId!! }, 
-                    include: { wallet: true }
-                })
+            //     const referrer = await this.prisma.user.findUnique({ 
+            //         where: { id: lvl == 1 ? user.referrerId : referrerPrev.referrerId!! }, 
+            //         include: { wallet: true }
+            //     })
 
-                if (!referrer) break
+            //     if (!referrer) break
 
-                referrerUserByLevel[lvl] = referrer
+            //     referrerUserByLevel[lvl] = referrer
 
-                if (!(referrer && referrer?.wallet)) continue
+            //     if (!(referrer && referrer?.wallet)) continue
 
-                const refWallet = await this.prisma.wallet.findUnique({ where: { id: referrer.wallet.id } })
+            //     const refWallet = await this.prisma.wallet.findUnique({ where: { id: referrer.wallet.id } })
 
-                if (!refWallet) continue
+            //     if (!refWallet) continue
 
-                const refPercent = settings.ref_lvl1_bonus_percent / 100
-                const usdtAmountRef = refPercent * deposit_amount_usdt
-                const altAmountRef = refPercent * deposit_amount_alt
+            //     const refPercent = settings.ref_lvl1_bonus_percent / 100
+            //     const usdtAmountRef = refPercent * deposit_amount_usdt
+            //     const altAmountRef = refPercent * deposit_amount_alt
 
-                await this.prisma.$transaction([
-                    this.prisma.wallet.update({
-                        where: { id: refWallet.id },
-                        data: { 
-                            alt_balance: {
-                                increment: altAmountRef
-                            }
-                        }
-                    }),
-                    this.prisma.transaction.create({
-                        data: {
-                            status: TransactionStatus.COMPLETED,
-                            type: TransactionType.BONUS,
-                            hash: txHash,
-                            ref_lvl: lvl,
-                            alt_usdt_rate: settings.alt_usdt_rate,
-                            from_token: TransactionToken.USDT,
-                            from_amount: usdtAmountRef,
-                            to_token: TransactionToken.ALT,
-                            to_amount: altAmountRef,
-                            walletId: refWallet.id,
-                        }
-                    })
-                ])
-            }
-        }
+            //     await this.prisma.$transaction([
+            //         this.prisma.wallet.update({
+            //             where: { id: refWallet.id },
+            //             data: { 
+            //                 alt_balance: {
+            //                     increment: altAmountRef
+            //                 }
+            //             }
+            //         }),
+            //         this.prisma.transaction.create({
+            //             data: {
+            //                 status: TransactionStatus.COMPLETED,
+            //                 type: TransactionType.BONUS,
+            //                 hash: txHash,
+            //                 ref_lvl: lvl,
+            //                 alt_usdt_rate: settings.alt_usdt_rate,
+            //                 from_token: TransactionToken.USDT,
+            //                 from_amount: usdtAmountRef,
+            //                 to_token: TransactionToken.ALT,
+            //                 to_amount: altAmountRef,
+            //                 walletId: refWallet.id,
+            //             }
+            //         })
+            //     ])
+            // }
 
         console.log('Deposit successfully completed')
 
@@ -510,7 +631,7 @@ export class TransactionsService implements OnModuleInit {
                     status: TransactionStatus.FROZEN,
                     type: TransactionType.REINVEST,
                     isLocked: true,
-                    lockedUntil: new Date(Date.now() - settings.reinvest_cooldown_days * 24 * 60 * 60 * 1000),
+                    lockedUntil: new Date(Date.now() + settings.reinvest_cooldown_days * 24 * 60 * 60 * 1000),
                     alb_alt_rate: rate,
                     from_token: TransactionToken.ALT,
                     from_amount: alt_dividends,
@@ -571,7 +692,7 @@ export class TransactionsService implements OnModuleInit {
                     status: TransactionStatus.FROZEN,
                     type: TransactionType.WITHDRAW,
                     isLocked: true,
-                    lockedUntil: new Date(Date.now() - settings.usdt_withdraw_cooldown_days * 24 * 60 * 60 * 1000),
+                    lockedUntil: new Date(Date.now() + settings.usdt_withdraw_cooldown_days * 24 * 60 * 60 * 1000),
                     alb_alt_rate: rate,
                     from_token: TransactionToken.ALT,
                     from_amount: amount,
