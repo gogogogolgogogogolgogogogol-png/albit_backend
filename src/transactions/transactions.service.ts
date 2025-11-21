@@ -310,7 +310,7 @@ export class TransactionsService implements OnModuleInit {
                 toAmount: alb_amount
             }
         } else if ((dto.from.token == TransactionToken.ALB) && (dto.to.token == TransactionToken.ALT)) {
-            if (dto.from.amount <= settings.min_swap_alb_amount) throw new BadRequestException("less then min amount")
+            if (dto.from.amount < settings.min_swap_alb_amount) throw new BadRequestException("less then min amount")
 
             const alb_alt_rate = settings.alb_alt_rate
             const alt_amount = dto.from.amount * alb_alt_rate
