@@ -125,7 +125,7 @@ model Settings {
     // COOLDOWN DURATION
     reinvest_cooldown_days Int @default(1)
     alt_alb_cooldown_days       Int @default(3)
-    usdt_withdraw_cooldown_days Int @default(30)
+    alb_alt_cooldown_days       Int @default(30)
 
     updatedAt DateTime @updatedAt
     createdAt DateTime @default(now())

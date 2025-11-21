@@ -144,29 +144,53 @@ export class TransactionsService implements OnModuleInit {
         for (const tx of transactions) {
             switch (tx.type) {
                 case TransactionType.SWAP: {
-                    if (tx.to_token != TransactionToken.ALB) continue
-                
-                    await this.prisma.$transaction([
-                        this.prisma.wallet.update({ 
-                            where: { id: tx.walletId },
-                            data: {
-                                locked_alb_balance: {
-                                    decrement: tx.to_amount
-                                },
-                                alb_balance: {
-                                    increment: tx.to_amount
+                    if (tx.to_token == TransactionToken.ALB) {
+                        await this.prisma.$transaction([
+                            this.prisma.wallet.update({ 
+                                where: { id: tx.walletId },
+                                data: {
+                                    locked_alb_balance: {
+                                        decrement: tx.to_amount
+                                    },
+                                    alb_balance: {
+                                        increment: tx.to_amount
+                                    }
                                 }
-                            }
-                        }),
-                        this.prisma.transaction.update({
-                            where: { id: tx.id },
-                            data: { 
-                                isLocked: false,
-                                status: TransactionStatus.COMPLETED,
-                                lockedUntil: null,
-                            }
-                        })
-                    ])
+                            }),
+                            this.prisma.transaction.update({
+                                where: { id: tx.id },
+                                data: { 
+                                    isLocked: false,
+                                    status: TransactionStatus.COMPLETED,
+                                    lockedUntil: null,
+                                }
+                            })
+                        ])
+                    } else if (tx.to_token == TransactionToken.ALT) {
+                        await this.prisma.$transaction([
+                            this.prisma.wallet.update({ 
+                                where: { id: tx.walletId },
+                                data: {
+                                    locked_alt_balance: {
+                                        decrement: tx.to_amount
+                                    },
+                                    alt_balance: {
+                                        increment: tx.to_amount
+                                    }
+                                }
+                            }),
+                            this.prisma.transaction.update({
+                                where: { id: tx.id },
+                                data: { 
+                                    isLocked: false,
+                                    status: TransactionStatus.COMPLETED,
+                                    lockedUntil: null,
+                                }
+                            })
+                        ])
+                    }
+                
+                    
 
                     break
                 }
@@ -332,13 +356,15 @@ export class TransactionsService implements OnModuleInit {
                     alb_balance: {
                         decrement: dto.from.amount
                     },
-                    alt_balance: {
+                    locked_alt_balance: {
                         increment: alt_amount
                     }
                 } }),
                 this.prisma.transaction.create({
                     data: {
-                        status: TransactionStatus.COMPLETED,
+                        status: TransactionStatus.FROZEN,
+                        isLocked: true,
+                        lockedUntil: new Date(Date.now() + settings.alb_alt_cooldown_days * 24 * 60 * 60 * 1000),
                         type: TransactionType.SWAP,
                         alb_alt_rate: settings.alb_alt_rate,
                         from_token: TransactionToken.ALB,
@@ -689,10 +715,10 @@ export class TransactionsService implements OnModuleInit {
             }),
             this.prisma.transaction.create({
                 data: {
-                    status: TransactionStatus.FROZEN,
+                    status: TransactionStatus.PENDING,
                     type: TransactionType.WITHDRAW,
-                    isLocked: true,
-                    lockedUntil: new Date(Date.now() + settings.usdt_withdraw_cooldown_days * 24 * 60 * 60 * 1000),
+                    // isLocked: true,
+                    // lockedUntil: new Date(Date.now() + settings.usdt_withdraw_cooldown_days * 24 * 60 * 60 * 1000),
                     alb_alt_rate: rate,
                     from_token: TransactionToken.ALT,
                     from_amount: amount,
