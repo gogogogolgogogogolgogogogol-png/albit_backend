@@ -49,7 +49,7 @@ export interface GetMeResponse {
     cooldowns_days: {
       reinvest: number,
       alt_alb_swap: number,
-      withdraw: number
+      alb_alt_swap: number,
     },
     fees: {
         deposit: number

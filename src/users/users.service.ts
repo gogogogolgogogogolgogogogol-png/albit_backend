@@ -313,7 +313,7 @@ export class UsersService {
     cooldowns_days: {
       reinvest: settings.reinvest_cooldown_days,
       alt_alb_swap: settings.alt_alb_cooldown_days,
-      withdraw: settings.usdt_withdraw_cooldown_days
+      alb_alt_swap: settings.alb_alt_cooldown_days,
     },
     referrals: {
       bonus_percent: settings.ref_lvl1_bonus_deposit_percent,
