@@ -646,7 +646,9 @@ export class TransactionsService implements OnModuleInit {
             this.prisma.wallet.update({ 
                 where: { id: user.wallet.id },
                 data: {
-                    alt_dividends: 0,
+                    alt_dividends: {
+                        decrement: amount
+                    },
                     locked_alb_balance: {
                         increment: alb_amount
                     }
