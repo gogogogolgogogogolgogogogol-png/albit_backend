@@ -46,6 +46,7 @@ export interface SwapResponse {
     fromAmount: number
     toAmount: number
     toToken: string
+    takeFromDividends?: number
 }
 
 export interface ReinvestRequest {
@@ -57,6 +58,7 @@ export interface ReinvestResponse {
     transaction: ITransaction
     status: string
     amount: number
+    takeFromBalance: number
 }
 
 export interface WithdrawRequest {

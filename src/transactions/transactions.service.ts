@@ -340,7 +340,8 @@ export class TransactionsService implements OnModuleInit {
                 transaction: this.transformTransaction(resTx),
                 fromAmount: dto.from.amount,
                 toToken: TransactionToken.ALB,
-                toAmount: alb_amount
+                toAmount: alb_amount,
+                takeFromDividends
             }
         } else if ((dto.from.token == TransactionToken.ALB) && (dto.to.token == TransactionToken.ALT)) {
             if (dto.from.amount < settings.min_swap_alb_amount) throw new BadRequestException("less then min amount")
@@ -693,7 +694,8 @@ export class TransactionsService implements OnModuleInit {
         return {
             transaction: this.transformTransaction(txRes),
             status: 'ok',
-            amount: alb_amount
+            amount: alb_amount,
+            takeFromBalance
         }
     }
 
