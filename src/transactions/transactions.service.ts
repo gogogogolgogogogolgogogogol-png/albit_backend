@@ -290,23 +290,32 @@ export class TransactionsService implements OnModuleInit {
             const alt_alb_rate = 1 / settings.alb_alt_rate
             const alb_amount = dto.from.amount * alt_alb_rate
 
+            const totalBalance = user.wallet.alt_balance + user.wallet.alt_dividends
             const amountWithLocked = user.wallet.alt_balance + user.wallet.locked_alt_balance
-            const isEnough = user.wallet.alt_balance >= dto.from.amount
             const isEnoughWithLocked = amountWithLocked >= dto.from.amount
 
             if (settings.alb_alt_rate != dto.alb_alt_rate) throw new BadRequestException("rate refresh")
 
-            if (!isEnough && isEnoughWithLocked) {
+            if (dto.from.amount > totalBalance && isEnoughWithLocked) {
                 throw new BadRequestException("locked:" + amountWithLocked)
-            } else if (!isEnough) {
+            } else if (dto.from.amount > totalBalance) {
                 throw new BadRequestException("insufficient balance")
             }
+
+            const isTakeFromDividends = user.wallet.alt_balance < dto.from.amount
+            const takeFromDividends = dto.from.amount - user.wallet.alt_balance
+            const taked_alt_from_balance = isTakeFromDividends ? user.wallet.alt_balance : dto.from.amount
 
             const [resWallet, resTx] = await this.prisma.$transaction([
                 this.prisma.wallet.update({ where: { id: user.wallet.id }, data: {
                     alt_balance: {
-                        decrement: dto.from.amount
+                        decrement: taked_alt_from_balance
                     },
+                    ...isTakeFromDividends ? {
+                        alt_dividends: {
+                            decrement: takeFromDividends
+                        }
+                    } : {},
                     locked_alb_balance: {
                         increment: alb_amount
                     }
@@ -630,8 +639,10 @@ export class TransactionsService implements OnModuleInit {
         const user = await this.prisma.user.findUnique({ where: { tgId }, include: { wallet: true } })
         if (!(user && user?.wallet)) throw new BadRequestException("user not found")
 
-        if (user.wallet.alt_dividends <= 0) throw new BadRequestException("no dividends")
-        if (amount > user.wallet.alt_dividends) throw new BadRequestException("wrong amount")
+        const totalBalance = user.wallet.alt_dividends + user.wallet.alt_balance
+
+        if (totalBalance <= 0) throw new BadRequestException("no balance")
+        if (amount > totalBalance) throw new BadRequestException("wrong amount")
         
         const settings = await this.prisma.settings.findFirst()
         if (!settings) throw new BadRequestException("settings not found")
@@ -642,13 +653,22 @@ export class TransactionsService implements OnModuleInit {
 
         const alb_amount = amount / rate
 
+        const isTakeFromBalance = user.wallet.alt_dividends < amount
+        const takeFromBalance = amount - user.wallet.alt_dividends
+        const taked_alt_from_dividends = isTakeFromBalance ? user.wallet.alt_dividends : amount
+
         const [walletRes, txRes] = await this.prisma.$transaction([ 
             this.prisma.wallet.update({ 
                 where: { id: user.wallet.id },
                 data: {
                     alt_dividends: {
-                        decrement: amount
+                        decrement: taked_alt_from_dividends
                     },
+                    ...isTakeFromBalance ? {
+                        alt_balance: {
+                            decrement: takeFromBalance
+                        }
+                    } : {},
                     locked_alb_balance: {
                         increment: alb_amount
                     }
