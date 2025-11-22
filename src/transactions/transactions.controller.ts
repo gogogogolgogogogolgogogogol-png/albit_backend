@@ -33,7 +33,7 @@ export class TransactionsController {
 
     @Post("reinvest")
     async reinvest(@Req() req: Request, @Res() res: Response, @Body() dto: ReinvestRequest) {
-        const reinvestRes = await this.transactionsService.reinvest(req['user']['tgId'], dto.alb_alt_rate)
+        const reinvestRes = await this.transactionsService.reinvest(req['user']['tgId'], dto.alb_alt_rate, dto.amount)
 
         return res.status(200).json(reinvestRes)
     }

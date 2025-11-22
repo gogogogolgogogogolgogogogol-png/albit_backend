@@ -50,6 +50,7 @@ export interface SwapResponse {
 
 export interface ReinvestRequest {
     alb_alt_rate: number
+    amount: number
 }
 
 export interface ReinvestResponse {

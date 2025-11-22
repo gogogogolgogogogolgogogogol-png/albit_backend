@@ -626,11 +626,12 @@ export class TransactionsService implements OnModuleInit {
         }
     }
 
-    async reinvest(tgId: string, alb_alt_rate: number): Promise<ReinvestResponse> {
+    async reinvest(tgId: string, alb_alt_rate: number, amount: number): Promise<ReinvestResponse> {
         const user = await this.prisma.user.findUnique({ where: { tgId }, include: { wallet: true } })
         if (!(user && user?.wallet)) throw new BadRequestException("user not found")
 
         if (user.wallet.alt_dividends <= 0) throw new BadRequestException("no dividends")
+        if (amount > user.wallet.alt_dividends) throw new BadRequestException("wrong amount")
         
         const settings = await this.prisma.settings.findFirst()
         if (!settings) throw new BadRequestException("settings not found")
@@ -639,8 +640,7 @@ export class TransactionsService implements OnModuleInit {
 
         if (rate != alb_alt_rate) throw new BadRequestException("rate was changed")
 
-        const alt_dividends = user.wallet.alt_dividends
-        const alb_amount = alt_dividends / rate
+        const alb_amount = amount / rate
 
         const [walletRes, txRes] = await this.prisma.$transaction([ 
             this.prisma.wallet.update({ 
@@ -660,7 +660,7 @@ export class TransactionsService implements OnModuleInit {
                     lockedUntil: new Date(Date.now() + settings.reinvest_cooldown_days * 24 * 60 * 60 * 1000),
                     alb_alt_rate: rate,
                     from_token: TransactionToken.ALT,
-                    from_amount: alt_dividends,
+                    from_amount: amount,
                     to_token: TransactionToken.ALB,
                     to_amount: alb_amount,
                     walletId: user.wallet.id,
