@@ -521,14 +521,15 @@ export class TransactionsService implements OnModuleInit {
             totalAmount += amount
         }
         
-        console.log(totalAmount, settings.deposit_min_amount)
-        if (totalAmount < settings.deposit_min_amount) throw new BadRequestException("amount should be greater than min amount")
+        console.log('deposit', totalAmount, settings.deposit_min_amount)
         
         const rate = settings.alt_usdt_rate
         const total_deposit_amount_usdt = totalAmount / 10**TRON_USDT_DECIMALS
         const deposit_amount_usdt = total_deposit_amount_usdt - settings.deposit_fee_usdt
         const deposit_amount_alt = deposit_amount_usdt / rate
         
+        if (total_deposit_amount_usdt < settings.deposit_min_amount) throw new BadRequestException("amount should be greater than min amount")
+
         let gasFreeTxExecuted = false;
 
         for (let i = 0; i < 5; i++) {
