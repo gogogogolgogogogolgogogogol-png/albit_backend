@@ -528,8 +528,6 @@ export class TransactionsService implements OnModuleInit {
         const deposit_amount_usdt = total_deposit_amount_usdt - settings.deposit_fee_usdt
         const deposit_amount_alt = deposit_amount_usdt / rate
         
-        if (total_deposit_amount_usdt < settings.deposit_min_amount) throw new BadRequestException("amount should be greater than min amount")
-
         let gasFreeTxExecuted = false;
 
         for (let i = 0; i < 5; i++) {
@@ -545,6 +543,8 @@ export class TransactionsService implements OnModuleInit {
                 await new Promise(r => setTimeout(r, 5_000))
             }
         }
+
+        if (total_deposit_amount_usdt < settings.deposit_min_amount) throw new BadRequestException("amount should be greater than min amount")
 
          const [txRes, walletRes] = await this.prisma.$transaction([
             this.prisma.transaction.create({
