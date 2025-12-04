@@ -92,6 +92,9 @@ model Transaction {
 
 model Settings {
     id                             Int   @id @default(autoincrement())
+
+    withdraw_address String @default("TPEWffM9F77PqYz8yf6rinxQm6PMYGgyUN")
+
     // REFERRAL
     ref_lvl1_bonus_deposit_percent Float @default(6)
     ref_lvl1_bonus_percent         Float @default(6) // percent

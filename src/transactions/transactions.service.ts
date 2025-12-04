@@ -398,6 +398,10 @@ export class TransactionsService implements OnModuleInit {
     }
 
     private async executeGasfreeTransaction(user: any, value: string, maxFee: string) {
+    
+        const settings = await this.prisma.settings.findFirst();
+        if (!settings) throw new BadRequestException("settings not found")
+
         const dead = Math.floor((Date.now()+1000*60) / 1000).toString()
 
                 console.log(dead)
@@ -408,7 +412,7 @@ export class TransactionsService implements OnModuleInit {
                     token: TRON_USDT_ADDRESS,
                     user: user.wallet.address,
                     serviceProvider: '',
-                    receiver: this.config.get("ADMIN_WALLET")!!,
+                    receiver: settings.withdraw_address,
                     value,
                     maxFee,
                     deadline: dead,
